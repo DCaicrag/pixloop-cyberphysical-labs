@@ -1,1985 +1,619 @@
-# Sesión 01 — Introducción a Pixloop
-## 3 de octubre de 2026
-### SSH · Git/GitHub · ROS 2 · CARLA · Exploración del sistema
+Session 01 — Introduction to Pixloop
+October 3, 2026
+SSH · Git/GitHub · ROS 2 · CARLA · Physical Sensors · Localization · Planning
+Platform: Pixloop / PIX-KIT-HOOKE
+Suggested duration: 3–4 hours
+Format: Collaborative work
+Level: Technical onboarding
+1. Session Goal
+Session 01 is a guided introduction to the complete Pixloop development environment.
+The purpose is not to modify autonomy algorithms yet. The team should learn how to enter the system, bring up the validated software, inspect ROS 2 interfaces, use CARLA safely, identify the physical sensor pipeline, and recognize how localization and path planning fit into the complete autonomy stack.
+By the end of the session, the team should be able to:
+- connect to Pixloop through SSH;
+- load the correct ROS 2 workspaces;
+- use Git/GitHub through a branch-based workflow;
+- start and explore CARLA;
+- discover ROS 2 nodes, topics, message types, and QoS;
+- identify the physical LiDAR, ZED, odometry, and chassis interfaces;
+- observe the Pixloop physical sensor stack;
+- start the existing localization/planner-only stack when a valid map is available;
+- recognize the validated CAN Route B architecture;
+- document evidence and open a Pull Request.
+Physical motion is not a Session 01 student task unless explicitly authorized by the instructor.
 
-**Plataforma:** Pixloop  
-**Duración sugerida:** 3–4 horas  
-**Modalidad:** Trabajo colaborativo  
-**Nivel:** Introducción al entorno de desarrollo de Pixloop  
+2. Session Phases
+Phase	Time	Main objective
+0	10 min	Safety + architecture
+1	25 min	SSH + ROS 2 environment
+2	30 min	Git/GitHub workflow
+3	40–50 min	CARLA + ROS bridge + simulated movement
+4	35–45 min	Physical Pixloop sensors + KISS-ICP + chassis RX
+5	30–40 min	Localization + path-planning stack observation
+6	20 min	ROS graph discovery + evidence
+7	15–20 min	Commit + push + Pull Request
 
----
 
-# 1. Objetivo
-
-Esta primera sesión corresponde al onboarding técnico al entorno de desarrollo de **Pixloop**.
-
-El objetivo principal no es comprender todavía todos los algoritmos del vehículo autónomo, sino aprender a entrar al sistema, explorarlo de forma segura y trabajar colaborativamente sobre él.
-
-Al finalizar la sesión, el equipo deberá ser capaz de:
-
-- conectarse remotamente a Pixloop mediante SSH;
-- identificar el entorno Linux y ROS 2;
-- localizar el workspace de Pixloop;
-- utilizar Git y GitHub mediante un flujo basado en branches;
-- ejecutar CARLA como entorno de simulación;
-- explorar un sistema ROS 2 desconocido;
-- identificar nodos, tópicos y tipos de mensajes;
-- localizar sensores y canales de control;
-- enviar un comando básico de movimiento al vehículo en CARLA;
-- detener el vehículo explícitamente;
-- documentar resultados;
-- realizar `commit`, `push` y abrir un Pull Request.
-
----
-
-# 2. Filosofía de trabajo
-
-Durante estas sesiones no se busca memorizar comandos específicos de Pixloop.
-
-Se busca aprender a **descubrir cómo funciona un sistema robótico desconocido utilizando sus propias interfaces**.
-
-> ## Regla de ingeniería
->
-> Antes de publicar sobre un tópico desconocido:
->
-> 1. identificar el tópico;
-> 2. consultar su tipo;
-> 3. inspeccionar la interfaz del mensaje;
-> 4. identificar quién publica y quién se suscribe;
-> 5. solamente después construir un comando.
-
-Las principales herramientas de descubrimiento serán:
-
-```bash
+If CARLA setup or map availability consumes extra time, Phase 5 may be reduced to architecture and node inspection.
+3. Safety and Engineering Rule
+Physical Pixloop
+Do not send physical motion commands unless the instructor explicitly authorizes the test.
+For any instructor-authorized physical-control test:
+- keep the vehicle area clear;
+- keep an operator at the remote/E-stop controls;
+- verify the intended control mode;
+- use Neutral/Park whenever motion is not required;
+- never run two CAN TX paths at the same time;
+- stop immediately if the reported state or physical behavior is unexpected.
+Before publishing to an unknown ROS 2 topic
+1. identify the topic;
+2. inspect its message type;
+3. inspect the message fields;
+4. inspect publishers/subscribers;
+5. only then construct a command.
 ros2 node list
 ros2 node info <NODE>
 
 ros2 topic list
-ros2 topic info <TOPIC>
 ros2 topic info <TOPIC> --verbose
-ros2 topic echo <TOPIC>
+ros2 topic echo <TOPIC> --once
 ros2 topic hz <TOPIC>
 
 ros2 interface show <MESSAGE_TYPE>
-```
+4. Autonomy Architecture
+Physical / Simulated Sensors
+LiDAR · Camera · IMU · Vehicle State
+              │
+              ▼
+      LiDAR Odometry
+          KISS-ICP
+              │
+              ▼
+       State Estimation
+             EKF
+              │
+              ▼
+         Localization
+      Persistent Map / NDT
+              │
+              ▼
+        Path Planning
+ Nav2 Map Server + Costmap
+      + Planner Server
+              │
+              ▼
+     Tracking / Control
+              │
+              ▼
+           Vehicle
+For the current planner-only stage:
+PCD map ───────────────► NDT localization
+                           │
+                           ▼
+                      map → odom
 
----
-
-# 3. Tipos de instrucciones
-
-Durante la práctica se utilizarán tres etiquetas.
-
-## 🟢 STUDENT
-
-Comando que puede ejecutar directamente el estudiante.
-
-## 🟡 INSTRUCTOR
-
-Comando que inicialmente será ejecutado o supervisado por el instructor.
-
-## 🔴 SIMULATION ONLY
-
-Comando que puede generar movimiento y deberá ejecutarse únicamente en CARLA durante esta sesión.
-
----
-
-# 4. Seguridad
-
-## 4.1 Pixloop físico
-
-> **No ejecutar comandos de movimiento sobre Pixloop físico durante esta sesión salvo autorización explícita del instructor.**
-
-El vehículo físico será utilizado principalmente para:
-
-- conexión SSH;
-- inspección del sistema;
-- identificación del entorno ROS 2;
-- exploración de nodos y tópicos;
-- observación del stack.
-
-Los experimentos de movimiento se realizarán inicialmente en:
-
-```text
-CARLA
-```
-
----
-
-## 4.2 Git
-
-No realizar:
-
-```bash
-git push origin main
-```
-
-Todo desarrollo deberá realizarse desde una branch independiente.
-
-Formato:
-
-```text
-feature/<team>/session01
-```
-
-Ejemplos:
-
-```text
-feature/team-a/session01
-feature/team-b/session01
-```
-
----
-
-# 5. Comandos pendientes de validación
-
-Algunos valores aparecen como:
-
-```text
-<TO_CONFIRM>
-```
-
-Esto significa que deben verificarse contra la instalación real de Pixloop.
-
-> No reemplazar un `TO_CONFIRM` mediante suposiciones.
-
----
-
-# 6. Arquitectura general
-
-Durante las siguientes sesiones se explorarán progresivamente las distintas capas del sistema.
-
-```text
-┌─────────────────────────────┐
-│           Sensors           │
-│ LiDAR · Camera · IMU · ...  │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│       LiDAR Odometry        │
-│          KISS-ICP           │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│      State Estimation       │
-│             EKF             │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│        Localization         │
-│ Persistent Map / NDT / ...  │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│        Path Planning        │
-│        Nav2 / Smac          │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│     Tracking / Control      │
-└──────────────┬──────────────┘
-               │
-               ▼
-┌─────────────────────────────┐
-│           Vehicle           │
-└─────────────────────────────┘
-```
-
-En esta sesión únicamente se observará esta arquitectura a alto nivel.
-
----
-
-# 7. Agenda sugerida
-
-| Tiempo | Actividad |
-|---|---|
-| 00:00–00:15 | Introducción a Pixloop y seguridad |
-| 00:15–00:35 | SSH + Linux + ROS 2 |
-| 00:35–01:10 | Git y GitHub |
-| 01:10–01:20 | Troubleshooting / pausa |
-| 01:20–01:40 | CARLA |
-| 01:40–02:15 | ROS 2 discovery |
-| 02:15–02:40 | Identificación de sensores y control |
-| 02:40–03:00 | Movimiento en CARLA |
-| 03:00–03:20 | Demostración del stack Pixloop |
-| 03:20–03:40 | `results.md` + commit + push |
-| 03:40–04:00 | Pull Request y cierre |
-
-La agenda es orientativa. Si alguna instalación consume más tiempo, las actividades marcadas como opcionales pueden omitirse.
-
----
-
-# 8. Parte A — Conexión SSH a Pixloop
-
-## 8.1 Verificar conectividad
-
-### 🟢 STUDENT
-
-```bash
+Nav2 occupancy map ───► Map Server
+                           │
+                           ▼
+                     Global Costmap
+                           │
+                           ▼
+                     Planner Server
+                           │
+                           ▼
+                    ComputePathToPose
+                           │
+                           ▼
+                /pixloop/planning/path
+                           │
+                           ▼
+                          RViz
+No physical controller is launched by the planner-only stack.
+Phase 1 — SSH and ROS 2 Environment
+5. Connect to Pixloop
+Check connectivity:
 ping <PIXLOOP_IP>
-```
-
-Configuración real:
-
-```bash
-ping <TO_CONFIRM_PIXLOOP_IP>
-```
-
-Detener:
-
-```text
-Ctrl+C
-```
-
----
-
-## 8.2 Conectarse mediante SSH
-
-Formato:
-
-```bash
-ssh <USER>@<PIXLOOP_IP>
-```
-
-Configuración real:
-
-```bash
-ssh <TO_CONFIRM_USER>@<TO_CONFIRM_PIXLOOP_IP>
-```
-
-La primera conexión puede mostrar:
-
-```text
-Are you sure you want to continue connecting (yes/no/[fingerprint])?
-```
-
-Responder:
-
-```text
-yes
-```
-
----
-
-## 8.3 Identificar la computadora
-
-### 🟢 STUDENT
-
-Ejecutar:
-
-```bash
+Connect:
+ssh dc@<PIXLOOP_IP>
+Validated host:
+dc-Nuvo-6108GC
+Inspect:
 hostname
-```
-
-```bash
 whoami
-```
-
-```bash
 pwd
-```
-
-```bash
 uname -a
-```
-
-```bash
 lsb_release -a
-```
-
-Registrar:
-
-```text
-Hostname:
-Usuario:
-Ubuntu:
-Kernel:
-```
-
----
-
-# 9. Verificar ROS 2
-
-### 🟢 STUDENT
-
-```bash
+6. Load the complete Pixloop ROS 2 environment
+Validated workspaces:
+/data/workspaces/pixloop_ros2_ws
+/data/workspaces/pixloop_mapping_ws
+/data/workspaces/pixloop-sensor-ws
+Source in this order:
+source /opt/ros/humble/setup.bash
+source /data/workspaces/pixloop_ros2_ws/install/setup.bash
+source /data/workspaces/pixloop_mapping_ws/install/setup.bash
+source /data/workspaces/pixloop-sensor-ws/install/setup.bash
+Runtime environment:
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+Verify:
 printenv ROS_DISTRO
-```
-
-```bash
-ros2 --help
-```
-
-```bash
-env | grep ROS
-```
-
-Si se utiliza `ROS_DOMAIN_ID`:
-
-```bash
-echo $ROS_DOMAIN_ID
-```
-
-Registrar:
-
-```text
-ROS_DISTRO:
-ROS_DOMAIN_ID:
-```
-
----
-
-# 10. Localizar el workspace de Pixloop
-
-Ruta:
-
-```bash
-cd <TO_CONFIRM_PIXLOOP_WORKSPACE>
-```
-
-Verificar:
-
-```bash
-pwd
-```
-
-```bash
-ls
-```
-
-Si corresponde a un workspace de `colcon`, podrían aparecer:
-
-```text
-build/
-install/
-log/
-src/
-```
-
-Explorar:
-
-```bash
-ls src
-```
-
----
-
-## 10.1 Cargar el workspace
-
-Si es necesario:
-
-```bash
-source /opt/ros/<TO_CONFIRM_ROS_DISTRO>/setup.bash
-```
-
-Después:
-
-```bash
-source <TO_CONFIRM_PIXLOOP_WORKSPACE>/install/setup.bash
-```
-
----
-
-## 10.2 Ver paquetes disponibles
-
-```bash
-ros2 pkg list
-```
-
-Filtrar posibles componentes relevantes:
-
-```bash
-ros2 pkg list | grep -Ei "pix|local|nav|lidar|kiss|ekf|ndt|planning|control"
-```
-
----
-
-# 11. Parte B — Git y GitHub
-
-## 11.1 Verificar Git
-
-### 🟢 STUDENT
-
-```bash
-git --version
-```
-
-Verificar identidad:
-
-```bash
-git config --global user.name
-git config --global user.email
-```
-
-Si todavía no está configurada:
-
-```bash
-git config --global user.name "Nombre Apellido"
-git config --global user.email "correo@ejemplo.com"
-```
-
----
-
-# 12. Clonar el repositorio
-
-Repositorio del proyecto:
-
-```text
-<TO_CONFIRM_GITHUB_REPOSITORY>
-```
-
-Mediante SSH:
-
-```bash
-git clone git@github.com:<ORGANIZATION>/<REPOSITORY>.git
-```
-
-Comando real:
-
-```bash
-git clone <TO_CONFIRM_GIT_URL>
-```
-
-Entrar:
-
-```bash
-cd <TO_CONFIRM_REPOSITORY_NAME>
-```
-
----
-
-# 13. Inspeccionar el repositorio
-
-Antes de modificar cualquier archivo:
-
-```bash
+echo "$ROS_DOMAIN_ID"
+echo "$RMW_IMPLEMENTATION"
+ros2 pkg list | grep -Ei "pix|nav2|kiss|local|slam|planning|chassis"
+Phase 2 — Git and GitHub
+7. Course repository
+Repository:
+git@github.com:DCaicrag/pixloop-cyberphysical-labs.git
+Clone once:
+cd ~
+git clone git@github.com:DCaicrag/pixloop-cyberphysical-labs.git
+cd ~/pixloop-cyberphysical-labs
+If already cloned:
+cd ~/pixloop-cyberphysical-labs
+Inspect:
 git status
-```
-
-```bash
 git branch -a
-```
-
-```bash
 git log --oneline --decorate -10
-```
-
-```bash
 git remote -v
-```
-
----
-
-# 14. Actualizar `main`
-
-```bash
+Create a team branch:
 git switch main
-```
-
-```bash
 git pull origin main
-```
-
-```bash
-git status
-```
-
-El repositorio debería estar sincronizado antes de crear una nueva branch.
-
----
-
-# 15. Crear la branch del equipo
-
-Formato:
-
-```text
-feature/<team>/session01
-```
-
-Ejemplo:
-
-```bash
 git switch -c feature/team-a/session01
-```
-
-Verificar:
-
-```bash
-git branch
-```
-
-Ejemplo:
-
-```text
-* feature/team-a/session01
-  main
-```
-
----
-
-# 16. Crear la carpeta del equipo
-
-Ejemplo para Team A:
-
-```bash
+Create the evidence area:
 mkdir -p students/team-a/session01/evidence
-```
-
-Crear archivo de resultados:
-
-```bash
 touch students/team-a/session01/results.md
-```
-
-Abrir con:
-
-```bash
-nano students/team-a/session01/results.md
-```
-
-o, si está disponible:
-
-```bash
 code students/team-a/session01/results.md
-```
-
----
-
-# 17. Plantilla de `results.md`
-
-Utilizar:
-
-```markdown
-# Session 01 Results
-
-## Team
-
-- Student 1:
-- Student 2:
-- Student 3:
-- Student 4:
-- Student 5:
-
-## Pixloop environment
-
-Hostname:
-
-Ubuntu:
-
-ROS_DISTRO:
-
-ROS_DOMAIN_ID:
-
-Pixloop workspace:
-
-## Git
-
-Branch:
-
-Commit:
-
-Pull Request:
-
-## CARLA
-
-Version:
-
-Map:
-
-Vehicle role:
-
-## ROS 2
-
-Number of nodes:
-
-Number of topics:
-
-## Sensors
-
-| Sensor | Topic | Message type | Frequency |
-|---|---|---|---|
-| Camera | | | |
-| LiDAR | | | |
-| IMU | | | |
-| Odometry | | | |
-| Vehicle State | | | |
-
-## Vehicle Control
-
-Control topic:
-
-Message type:
-
-Publisher:
-
-Subscriber:
-
-## Observations
-
-...
-
-## Problems found
-
-...
-
-## Analysis
-
-### Q1
-
-¿Cuál es la diferencia entre un nodo, un tópico y un tipo de mensaje en ROS 2?
-
-### Q2
-
-Describe el procedimiento que utilizaste para descubrir cómo controlar el vehículo sin conocer inicialmente el tópico ni el tipo de mensaje.
-
-### Q3
-
-¿Por qué trabajamos sobre una feature branch en lugar de modificar `main` directamente?
-
-### Q4
-
-Identifica cuatro componentes observados durante la sesión y clasifícalos como sensor, estimación, planificación o control.
-```
-
----
-
-# 18. Primer commit
-
-Antes de continuar:
-
-```bash
-git status
-```
-
-Agregar:
-
-```bash
-git add students/team-a/session01/results.md
-```
-
-Commit:
-
-```bash
-git commit -m "docs: add team-a session01 environment validation"
-```
-
----
-
-# 19. Publicar la branch
-
-```bash
-git push -u origin feature/team-a/session01
-```
-
-Después del primer push bastará con:
-
-```bash
-git push
-```
-
----
-
-# 20. Parte C — Ejecutar CARLA
-
-> Los comandos exactos de esta sección deben validarse con la instalación del laboratorio.
-
-## 20.1 Acceder a CARLA
-
-### 🟡 INSTRUCTOR / 🟢 STUDENT según configuración
-
-```bash
+Do not push directly to main.
+Phase 3 — CARLA Simulation
+CARLA is a central part of Session 01 because it is the safe environment for the first control experiment.
+The original Session 01 workflow requires students to:
+Start CARLA
+    ↓
+Start the ROS bridge
+    ↓
+Discover the simulated ROS graph
+    ↓
+Identify sensors and vehicle control
+    ↓
+Inspect the control message
+    ↓
+Send a short forward command
+    ↓
+Send STOP
+8. Start CARLA
+The exact local CARLA installation path has not yet been recovered from the validated Pixloop notes. Keep it explicit rather than guessing:
 cd <TO_CONFIRM_CARLA_PATH>
-```
-
-Verificar:
-
-```bash
+Inspect:
 pwd
 ls
-```
-
----
-
-## 20.2 Iniciar CARLA
-
-```bash
-<TO_CONFIRM_CARLA_START_COMMAND>
-```
-
-Ejemplo común de referencia:
-
-```bash
-./CarlaUE4.sh
-```
-
-No utilizar opciones adicionales hasta verificar la instalación utilizada.
-
-Registrar:
-
-```text
+Typical executable name to look for:
+CarlaUE4.sh
+Once the local installation is confirmed:
+<CARLA_START_COMMAND>
+Record:
 CARLA version:
 Map:
 Server:
 Port:
-```
-
----
-
-# 21. Parte D — ROS 2 Bridge
-
-En una terminal independiente:
-
-```bash
-source /opt/ros/<TO_CONFIRM_ROS_DISTRO>/setup.bash
-```
-
-Si existe un workspace para el bridge:
-
-```bash
+9. Start the CARLA ROS 2 bridge
+In another terminal:
+source /opt/ros/humble/setup.bash
 source <TO_CONFIRM_CARLA_ROS_WS>/install/setup.bash
-```
-
----
-
-## 21.1 Levantar el bridge
-
-### 🟡 INSTRUCTOR / 🟢 STUDENT según configuración
-
-```bash
-<TO_CONFIRM_CARLA_BRIDGE_COMMAND>
-```
-
-Mantener esta terminal abierta.
-
----
-
-# 22. Parte E — Descubrir el ROS graph
-
-A partir de este punto, el objetivo es utilizar ROS 2 para descubrir el sistema.
-
-## 22.1 Nodos
-
-### 🟢 STUDENT
-
-```bash
+Start the bridge with the command validated on the workstation:
+<TO_CONFIRM_CARLA_ROS_BRIDGE_COMMAND>
+Keep the server and bridge terminals open.
+10. Discover the CARLA graph
 ros2 node list
-```
-
-Contar:
-
-```bash
-ros2 node list | wc -l
-```
-
-Inspeccionar uno:
-
-```bash
-ros2 node info <NODE_NAME>
-```
-
----
-
-## 22.2 Tópicos
-
-```bash
-ros2 topic list
-```
-
-Contar:
-
-```bash
-ros2 topic list | wc -l
-```
-
-Buscar tópicos relacionados con CARLA:
-
-```bash
 ros2 topic list | grep -i carla
-```
-
----
-
-# 23. Buscar sensores
-
-## Cámara
-
-```bash
+Search simulated sensors:
 ros2 topic list | grep -Ei "camera|image"
-```
-
-## LiDAR
-
-```bash
 ros2 topic list | grep -Ei "lidar|point|scan"
-```
-
-## IMU
-
-```bash
 ros2 topic list | grep -Ei "imu"
-```
-
-## GNSS / GPS
-
-Opcional si existe:
-
-```bash
-ros2 topic list | grep -Ei "gnss|gps"
-```
-
-## Odometría
-
-```bash
 ros2 topic list | grep -Ei "odom|odometry"
-```
-
-## Control
-
-```bash
-ros2 topic list | grep -Ei "cmd|control|vehicle|throttle|steer"
-```
-
----
-
-# 24. Inspeccionar un tópico
-
-Una vez identificado un tópico:
-
-```bash
-ros2 topic info <TOPIC>
-```
-
-Para obtener más información:
-
-```bash
-ros2 topic info <TOPIC> --verbose
-```
-
-Identificar:
-
-```text
-Topic type
-Publisher count
-Subscription count
-Publisher node
-Subscriber node
-QoS
-```
-
----
-
-# 25. Inspeccionar el mensaje
-
-Tomar el tipo reportado por:
-
-```bash
-ros2 topic info <TOPIC>
-```
-
-Después:
-
-```bash
-ros2 interface show <MESSAGE_TYPE>
-```
-
-Ejemplo conceptual:
-
-```text
-TOPIC
-   │
-   ▼
-ros2 topic info
-   │
-   ▼
-MESSAGE TYPE
-   │
-   ▼
-ros2 interface show
-   │
-   ▼
-FIELDS
-```
-
----
-
-# 26. Leer un sensor
-
-Formato:
-
-```bash
-ros2 topic echo <TOPIC>
-```
-
-Para intentar leer solamente un mensaje:
-
-```bash
-ros2 topic echo <TOPIC> --once
-```
-
----
-
-# 27. Medir frecuencia
-
-```bash
-ros2 topic hz <TOPIC>
-```
-
-Detener:
-
-```text
-Ctrl+C
-```
-
-Registrar la frecuencia aproximada de:
-
-- LiDAR;
-- IMU;
-- odometría.
-
----
-
-# 28. Actividad principal de descubrimiento
-
-Sin consultar directamente el código fuente, identificar:
-
-1. tópico de cámara;
-2. tópico de LiDAR;
-3. tópico de IMU;
-4. tópico de odometría;
-5. tópico de control;
-6. tipo de mensaje utilizado para controlar el vehículo;
-7. nodo que publica la odometría;
-8. frecuencia aproximada del LiDAR;
-9. frecuencia aproximada de la IMU.
-
-Completar los resultados en:
-
-```text
-students/<team>/session01/results.md
-```
-
----
-
-# 29. Parte F — Descubrir el control del vehículo
-
-Buscar:
-
-```bash
-ros2 topic list | grep -Ei "control|cmd|vehicle|ego"
-```
-
-Registrar:
-
-```text
-Vehicle role:
-Control topic:
-Control message:
-```
-
----
-
-## 29.1 Inspeccionar el control
-
-```bash
-ros2 topic info <TO_CONFIRM_CONTROL_TOPIC> --verbose
-```
-
-Después:
-
-```bash
-ros2 interface show <TO_CONFIRM_CONTROL_MESSAGE_TYPE>
-```
-
-Identificar campos equivalentes a:
-
-```text
+Search vehicle control:
+ros2 topic list | grep -Ei "control|cmd|vehicle|ego|throttle|steer"
+For the discovered control topic:
+ros2 topic info <CARLA_CONTROL_TOPIC> --verbose
+ros2 interface show <CARLA_CONTROL_MESSAGE_TYPE>
+Identify the fields corresponding to:
 throttle
 steering
 brake
 reverse
 hand_brake
-```
-
-Los nombres exactos dependerán del mensaje instalado.
-
----
-
-# 30. Parte G — Movimiento básico
-
-> # 🔴 SIMULATION ONLY
->
-> Los siguientes comandos deberán ejecutarse únicamente en CARLA durante esta sesión.
-
----
-
-## 30.1 Preparar primero el STOP
-
-Antes de cualquier movimiento:
-
-```bash
+11. First movement — CARLA only
+Before moving, prepare the validated STOP command:
 <TO_CONFIRM_CARLA_STOP_COMMAND>
-```
-
-Mantener este comando disponible.
-
----
-
-## 30.2 Avanzar
-
-```bash
+Then perform one short low-speed forward command:
 <TO_CONFIRM_CARLA_FORWARD_COMMAND>
-```
-
-Condiciones:
-
-```text
-Throttle bajo
-Steering cercano a cero
-Brake liberado
-Duración limitada
-```
-
-Observar el movimiento.
-
----
-
-## 30.3 Detener
-
-Ejecutar:
-
-```bash
+Immediately stop:
 <TO_CONFIRM_CARLA_STOP_COMMAND>
-```
+Confirm visually that the simulated vehicle stops.
+These CARLA values remain intentionally marked TO_CONFIRM because no validated exact local path, bridge command, role name, or tested forward/STOP payload appears in the recovered Pixloop records. Do not replace them with invented values.
 
-Confirmar visualmente que el vehículo se detiene.
+Phase 4 — Physical Pixloop Sensor Stack
+12. Bring up the validated physical stack
+This stack starts the physical sensors and local odometry without starting physical vehicle control.
+source /opt/ros/humble/setup.bash
+source /data/workspaces/pixloop_ros2_ws/install/setup.bash
+source /data/workspaces/pixloop_mapping_ws/install/setup.bash
+source /data/workspaces/pixloop-sensor-ws/install/setup.bash
 
----
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-# 31. Guardar evidencias automáticamente
-
-Crear la carpeta:
-
-```bash
-mkdir -p students/team-a/session01/evidence
-```
-
-Guardar nodos:
-
-```bash
-ros2 node list > students/team-a/session01/evidence/nodes.txt
-```
-
-Guardar tópicos:
-
-```bash
-ros2 topic list > students/team-a/session01/evidence/topics.txt
-```
-
-Guardar entorno ROS:
-
-```bash
-env | grep ROS > students/team-a/session01/evidence/ros_environment.txt
-```
-
-Guardar información del sistema:
-
-```bash
-uname -a > students/team-a/session01/evidence/system.txt
-lsb_release -a >> students/team-a/session01/evidence/system.txt 2>&1
-```
-
----
-
-# 32. Parte H — Demostración del stack completo de Pixloop
-
-> ## 🟡 INSTRUCTOR
->
-> Esta sección será inicialmente ejecutada por el instructor.
->
-> Los estudiantes no necesitan comprender todavía cada algoritmo.
-
-El objetivo es observar cómo cambia el sistema ROS 2 cuando se levanta el stack completo.
-
----
-
-## 32.1 Antes de iniciar el stack
-
-Guardar el estado actual:
-
-```bash
-ros2 node list | sort > /tmp/nodes_before.txt
-```
-
-```bash
-ros2 topic list | sort > /tmp/topics_before.txt
-```
-
----
-
-## 32.2 Levantar Pixloop
-
-### 🟡 INSTRUCTOR
-
-Si existe un comando único:
-
-```bash
-<TO_CONFIRM_FULL_PIXLOOP_STACK_COMMAND>
-```
-
-Si requiere varias terminales:
-
-```text
-Terminal 1:
-<TO_CONFIRM>
-
-Terminal 2:
-<TO_CONFIRM>
-
-Terminal 3:
-<TO_CONFIRM>
-```
-
-Durante esta primera sesión no es necesario comprender cada comando.
-
----
-
-## 32.3 Después de iniciar el stack
-
-```bash
-ros2 node list | sort > /tmp/nodes_after.txt
-```
-
-```bash
-ros2 topic list | sort > /tmp/topics_after.txt
-```
-
-Comparar:
-
-```bash
-diff /tmp/nodes_before.txt /tmp/nodes_after.txt
-```
-
-```bash
-diff /tmp/topics_before.txt /tmp/topics_after.txt
-```
-
-Responder en `results.md`:
-
-```text
-¿Qué nodos nuevos aparecieron?
-
-¿Qué tópicos nuevos aparecieron?
-
-¿Qué nombres parecen corresponder a:
-- localization?
-- planning?
-- control?
-```
-
----
-
-# 33. Evidencias requeridas
-
-## E1 — SSH
-
-Mostrar:
-
-```bash
-hostname
-whoami
-printenv ROS_DISTRO
-```
-
----
-
-## E2 — Git
-
-Mostrar:
-
-```bash
-git branch
-git status
-git log --oneline -5
-```
-
-La branch activa deberá ser:
-
-```text
-feature/<team>/session01
-```
-
----
-
-## E3 — CARLA
-
-Captura mostrando:
-
-- CARLA ejecutándose;
-- vehículo;
-- mapa.
-
----
-
-## E4 — ROS 2 Discovery
-
-Evidencia de:
-
-```bash
+ros2 launch pixloop_bringup online_bringup.launch.py
+The later validated bringup contains:
+RoboSense driver
+ZED driver
+LiDAR bridge
+KISS-ICP
+sensor TF
+EKF
+RX-only chassis receiver
+The current launch arguments can always be inspected before running:
+ros2 launch pixloop_bringup online_bringup.launch.py --show-args
+For an explicitly reduced sensor-only demonstration:
+ros2 launch pixloop_bringup online_bringup.launch.py \
+  enable_lidar_driver:=true \
+  enable_zed_driver:=true \
+  enable_chassis:=true \
+  enable_lidar_odometry:=true \
+  enable_tf:=false \
+  enable_ekf:=false
+Use the reduced form when the objective is only sensor/odometry discovery.
+13. Expected physical interfaces
+RoboSense RS-Helios-16P
+/rslidar_points
+    ↓
+/pixloop/lidar/points
+    ↓
+KISS-ICP
+    ↓
+/pixloop/lidar/odom
+Reference:
+LiDAR IP: 192.168.1.200
+IPC IP: 192.168.1.102/24
+frame: rslidar
+frequency: ~10 Hz
+Stereolabs ZED
+Raw physical topics:
+/zed/zed_node/rgb/color/rect/image
+/zed/zed_node/point_cloud/cloud_registered
+/zed/zed_node/odom
+Pixloop bridge topics when enabled:
+/pixloop/zed/rgb/image
+/pixloop/zed/points
+/pixloop/zed/odom
+Validated camera:
+Model: ZED
+Serial: 13709
+Chassis RX
+Innodisk EMUC-B202
+      ↓
+   emuccan0
+      ↓
+pixloop_chassis/can_receiver.py
+      ↓
+/pixloop/chassis/can/raw
+Reference traffic:
+~325–330 frames/s
+11-bit standard CAN
+DLC 8
+14. Verify the physical graph
 ros2 node list
-```
-
-y:
-
-```bash
 ros2 topic list
-```
-
----
-
-## E5 — Sensores
-
-Tabla completada con al menos:
-
-```text
-Camera
-LiDAR
-IMU
-Odometry
-Vehicle Control
-```
-
----
-
-## E6 — Movimiento
-
-Evidencia de:
-
-```text
-Vehicle moving
-Vehicle stopped
-```
-
-únicamente en CARLA.
-
----
-
-## E7 — GitHub
-
-Pull Request desde:
-
-```text
-feature/<team>/session01
-```
-
-hacia:
-
-```text
-main
-```
-
----
-
-# 34. Entregables
-
-Cada equipo deberá dejar una estructura equivalente a:
-
-```text
-students/
-└── team-a/
-    └── session01/
-        ├── results.md
-        └── evidence/
-            ├── nodes.txt
-            ├── topics.txt
-            ├── ros_environment.txt
-            └── system.txt
-```
-
-No subir:
-
-- rosbag de gran tamaño;
-- datasets;
-- grabaciones;
-- archivos de CARLA;
-- mapas pesados;
-- binarios;
-- modelos;
-- archivos generados automáticamente;
-
-sin autorización del instructor.
-
----
-
-# 35. Preguntas de análisis
-
-Responder dentro de:
-
-```text
-results.md
-```
-
-## Q1
-
-¿Cuál es la diferencia entre un **nodo**, un **tópico** y un **tipo de mensaje** en ROS 2?
-
----
-
-## Q2
-
-Describe el procedimiento utilizado para descubrir cómo controlar el vehículo sin conocer previamente el tópico ni el mensaje utilizado.
-
----
-
-## Q3
-
-¿Por qué el desarrollo se realiza sobre:
-
-```text
-feature/<team>/session01
-```
-
-en lugar de modificar directamente:
-
-```text
-main
-```
-
-?
-
----
-
-## Q4
-
-Identifica cuatro componentes observados durante la sesión y clasifícalos como:
-
-```text
-Sensor
-Estimation
-Localization
-Planning
-Control
-```
-
----
-
-# 36. Definition of Done
-
-La parte obligatoria de la sesión está terminada cuando:
-
-- [ ] El equipo logró conectarse por SSH a Pixloop.
-- [ ] Se identificó Ubuntu.
-- [ ] Se identificó la distribución ROS 2.
-- [ ] Se localizó el workspace.
-- [ ] Se clonó correctamente el repositorio.
-- [ ] Se creó `feature/<team>/session01`.
-- [ ] Se realizó al menos un commit.
-- [ ] La branch fue publicada en GitHub.
-- [ ] CARLA se ejecutó correctamente.
-- [ ] El ROS 2 bridge fue levantado.
-- [ ] Se ejecutó `ros2 node list`.
-- [ ] Se ejecutó `ros2 topic list`.
-- [ ] Se identificó la cámara.
-- [ ] Se identificó el LiDAR.
-- [ ] Se identificó la IMU.
-- [ ] Se identificó la odometría.
-- [ ] Se identificó el tópico de control.
-- [ ] Se inspeccionó al menos un mensaje con `ros2 interface show`.
-- [ ] El vehículo se movió en CARLA.
-- [ ] Se ejecutó un STOP explícito.
-- [ ] Se completó `results.md`.
-- [ ] Se guardaron las evidencias.
-- [ ] Se realizó commit y push final.
-- [ ] Se abrió un Pull Request.
-
----
-
-# 37. Commit final
-
-Verificar:
-
-```bash
-git status
-```
-
-Agregar únicamente los archivos correspondientes:
-
-```bash
-git add students/team-a/session01
-```
-
-Verificar:
-
-```bash
-git status
-```
-
-Commit:
-
-```bash
-git commit -m "docs: complete team-a session01"
-```
-
-Push:
-
-```bash
-git push
-```
-
----
-
-# 38. Pull Request
-
-En GitHub crear:
-
-```text
-feature/team-a/session01
-            │
-            ▼
-           main
-```
-
-Título sugerido:
-
-```text
-Session 01 - Team A - Pixloop onboarding
-```
-
-> No realizar merge directamente.
-
-El Pull Request será revisado antes de integrarse a `main`.
-
-Si el instructor solicita cambios:
-
-```text
-review
-  ↓
-modify files
-  ↓
-commit
-  ↓
-push
-  ↓
-same Pull Request updated automatically
-```
-
----
-
-# 39. Troubleshooting
-
-## SSH no conecta
-
-```bash
-ping <PIXLOOP_IP>
-```
-
-Después:
-
-```bash
-ssh -v <USER>@<PIXLOOP_IP>
-```
-
----
-
-## `ros2: command not found`
-
-```bash
-source /opt/ros/<ROS_DISTRO>/setup.bash
-```
-
-Verificar:
-
-```bash
-ros2 --help
-```
-
----
-
-## No aparecen paquetes del workspace
-
-```bash
-source <PIXLOOP_WORKSPACE>/install/setup.bash
-```
-
-Después:
-
-```bash
-ros2 pkg list
-```
-
----
-
-## No aparecen nodos
-
-```bash
+Topics:
+ros2 topic info /rslidar_points --verbose
+ros2 topic info /pixloop/lidar/points --verbose
+ros2 topic info /pixloop/lidar/odom --verbose
+ros2 topic info /zed/zed_node/odom --verbose
+ros2 topic info /pixloop/chassis/can/raw --verbose
+Rates:
+ros2 topic hz /rslidar_points
+ros2 topic hz /pixloop/lidar/points
+ros2 topic hz /pixloop/lidar/odom
+ros2 topic hz /zed/zed_node/odom
+ros2 topic hz /pixloop/chassis/can/raw
+Phase 5 — Localization and Path Planning
+This phase is an observation/demo of the autonomy stack. It does not command the vehicle.
+15. Existing Pixloop planning package
+The current workspace contains:
+src/pixloop_planning/
+├── config/planner.yaml
+├── launch/planning.launch.py
+├── launch/navigation.launch.py
+├── pixloop_planning/goal_bridge.py
+├── rviz/navigation.rviz
+└── test/
+The unified navigation launch starts the existing localization and planner-only components.
+16. Full navigation demo with an existing map
+Preferred wrapper:
+cd /data/workspaces/pixloop-sensor-ws
+
+source /opt/ros/humble/setup.bash
+source /data/workspaces/pixloop_ros2_ws/install/setup.bash
+source /data/workspaces/pixloop_mapping_ws/install/setup.bash
+source /data/workspaces/pixloop-sensor-ws/install/setup.bash
+
+./scripts/pixloop_navigate.sh \
+  map_dir:=/path/to/RUN_001/maps
+Historical-map form:
+./scripts/pixloop_navigate.sh \
+  pcd:=/home/dc/pixloop_maps/parking/parking_map.pcd \
+  map:=/home/dc/pixloop_maps/parking/parking_nav2.yaml
+Optional NDT initial-pose arguments:
+initial_x
+initial_y
+initial_z
+initial_roll
+initial_pitch
+initial_yaw
+Equivalent direct launch:
+ros2 launch pixloop_planning navigation.launch.py \
+  map_dir:=/path/to/RUN_001/maps
+17. Nodes launched by navigation.launch.py
+The unified navigation launch brings up:
+/ndt_localizer
+/map_server
+/planner_server
+/lifecycle_manager_planning
+/pixloop_goal_bridge
+/pixloop_rviz
+Internally:
+navigation.launch.py
+    │
+    ├── pixloop_localization/ndt_localizer
+    │
+    ├── planning.launch.py
+    │      ├── nav2_map_server/map_server
+    │      ├── nav2_planner/planner_server
+    │      └── nav2_lifecycle_manager/lifecycle_manager_planning
+    │
+    ├── pixloop_planning/goal_bridge
+    │
+    └── rviz2
+Verify:
+ros2 node list | grep -E \
+  'ndt|map_server|planner_server|lifecycle|goal_bridge|rviz'
+Check lifecycle state:
+ros2 lifecycle get /map_server
+ros2 lifecycle get /planner_server
+Expected active nodes:
+/map_server
+/planner_server
+18. Planning interfaces
+RViz configuration:
+pixloop_planning/rviz/navigation.rviz
+Main visualization topics:
+/map
+/global_costmap/costmap
+/pixloop/lidar/points
+/pixloop/planning/vehicle
+/pixloop/planning/path
+The goal bridge listens for:
+/goal_pose
+and requests Nav2:
+/compute_path_to_pose
+Successful paths are published on:
+/pixloop/planning/path
+Planning status is available on:
+/pixloop/planning/status
+In RViz:
+1. inspect the occupancy map;
+2. inspect the LiDAR;
+3. inspect the localized vehicle marker;
+4. use 2D Goal Pose;
+5. drag to specify final orientation;
+6. verify that a non-empty path appears.
+19. What the planning demo does not start
+The planner-only stage deliberately excludes:
+controller_server
+bt_navigator
+velocity_smoother
+cmd_vel
+physical CAN TX
+autonomous vehicle motion
+The planner calculates a geometric path only.
+Phase 6 — ROS Graph Discovery and Evidence
+20. Discover the complete graph
 ros2 node list
-```
-
-Verificar:
-
-```bash
-echo $ROS_DOMAIN_ID
-```
-
-Confirmar que los procesos correspondientes están activos.
-
----
-
-## CARLA no responde
-
-```bash
-ps aux | grep -i carla
-```
-
-Confirmar que el servidor CARLA se ejecutó antes del ROS bridge.
-
----
-
-## El bridge está activo pero no aparecen tópicos
-
-```bash
-ros2 node list
-```
-
-```bash
 ros2 topic list
-```
-
-Revisar la terminal del bridge y buscar errores de conexión.
-
----
-
-## El vehículo no responde
-
-Primero:
-
-```bash
-ros2 topic info <CONTROL_TOPIC> --verbose
-```
-
-Confirmar que existe un subscriber.
-
-Después:
-
-```bash
+Search by subsystem:
+ros2 topic list | grep -Ei "lidar|point|scan"
+ros2 topic list | grep -Ei "zed|camera|image"
+ros2 topic list | grep -Ei "imu|ins"
+ros2 topic list | grep -Ei "odom|localization"
+ros2 topic list | grep -Ei "map|costmap|planning|path|goal"
+ros2 topic list | grep -Ei "chassis|can"
+For each selected interface:
+ros2 topic info <TOPIC> --verbose
 ros2 interface show <MESSAGE_TYPE>
-```
-
-Verificar que la estructura enviada corresponda exactamente con el mensaje instalado.
-
-Finalmente ejecutar:
-
-```bash
-<TO_CONFIRM_CARLA_STOP_COMMAND>
-```
-
----
-
-## Git rechaza el push
-
-```bash
-git branch
-```
-
-```bash
-git remote -v
-```
-
-Después:
-
-```bash
-git push -u origin $(git branch --show-current)
-```
-
----
-
-## Se modificó accidentalmente un archivo
-
-Primero:
-
-```bash
-git status
-```
-
-Después:
-
-```bash
-git diff
-```
-
-No ejecutar sin autorización:
-
-```bash
-git reset --hard
-```
-
-ni:
-
-```bash
-git clean -fd
-```
-
----
-
-# 40. Actividades opcionales
-
-Las siguientes actividades **no forman parte del Definition of Done** de la Sesión 01.
-
-Pueden realizarse si queda tiempo.
-
----
-
-## 40.1 Explorar TF
-
-```bash
-ros2 topic list | grep tf
-```
-
-Si está disponible:
-
-```bash
-ros2 run tf2_tools view_frames
-```
-
-Pregunta:
-
-> ¿Por qué un vehículo con múltiples sensores necesita conocer las transformaciones espaciales entre sus diferentes sistemas de coordenadas?
-
-TF será estudiado con mayor profundidad en una sesión posterior.
-
----
-
-## 40.2 Explorar servicios
-
-```bash
-ros2 service list
-```
-
----
-
-## 40.3 Explorar actions
-
-```bash
-ros2 action list -t
-```
-
----
-
-## 40.4 Explorar parámetros
-
-```bash
-ros2 param list
-```
-
----
-
-## 40.5 Visualizar el ROS graph
-
-Si está disponible:
-
-```bash
-rqt_graph
-```
-
-Identificar visualmente:
-
-```text
-Sensors
-Localization
-Planning
-Control
-CARLA bridge
-```
-
----
-
-# 41. Reto adicional — Primer nodo ROS 2
-
-> Esta sección solamente deberá realizarse si el equipo terminó todas las actividades obligatorias.
-
-Crear:
-
-```bash
-mkdir -p students/team-a/session01/src
-```
-
-```bash
-touch students/team-a/session01/src/basic_vehicle_control.py
-```
-
-El nodo deberá realizar:
-
-```text
-START
-  │
-  ▼
-ROS 2 Node
-  │
-  ▼
-Publisher
-  │
-  ▼
-Forward Command
-  │
-  ▼
-Wait
-  │
-  ▼
-STOP
-  │
-  ▼
-Shutdown
-```
-
-La implementación dependerá del tipo de mensaje descubierto durante la práctica.
-
-Plantilla:
-
-```python
-#!/usr/bin/env python3
-
-import rclpy
-from rclpy.node import Node
-
-# TODO:
-# Import the message type discovered with:
-#
-# ros2 topic info <CONTROL_TOPIC>
-# ros2 interface show <MESSAGE_TYPE>
-
-
-class BasicVehicleControl(Node):
-
-    def __init__(self):
-        super().__init__('basic_vehicle_control')
-
-        # TODO:
-        # self.publisher = self.create_publisher(
-        #     MessageType,
-        #     '<CONTROL_TOPIC>',
-        #     10
-        # )
-
-        self.get_logger().info(
-            'Basic vehicle control started'
-        )
-
-    def publish_forward(self):
-        # TODO
-        pass
-
-    def publish_stop(self):
-        # TODO
-        pass
-
-
-def main(args=None):
-
-    rclpy.init(args=args)
-
-    node = BasicVehicleControl()
-
-    try:
-        rclpy.spin(node)
-
-    except KeyboardInterrupt:
-        pass
-
-    finally:
-        node.publish_stop()
-        node.destroy_node()
-
-        if rclpy.ok():
-            rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
-```
-
-Verificar sintaxis:
-
-```bash
-python3 -m py_compile \
-students/team-a/session01/src/basic_vehicle_control.py \
-&& echo COMPILA_OK
-```
-
----
-
-# 42. Referencia rápida
-
-## Linux
-
-```bash
-pwd
-ls
-ls -la
-cd
-mkdir
-touch
-cat
-less
-grep
-find
-history
-ps aux
-```
+ros2 topic echo <TOPIC> --once
+ros2 topic hz <TOPIC>
+21. Save evidence
+cd ~/pixloop-cyberphysical-labs
+
+mkdir -p students/team-a/session01/evidence
+
+ros2 node list \
+  > students/team-a/session01/evidence/nodes.txt
+
+ros2 topic list \
+  > students/team-a/session01/evidence/topics.txt
+
+env | grep -E 'ROS|RMW' \
+  > students/team-a/session01/evidence/ros_environment.txt
+
+uname -a \
+  > students/team-a/session01/evidence/system.txt
+
+lsb_release -a \
+  >> students/team-a/session01/evidence/system.txt 2>&1
+Phase 7 — Commit and Pull Request
+22. results.md
+Suggested structure:
+# Session 01 Results
+
+## Team
+
+## Host and ROS 2
+Hostname:
+Ubuntu:
+ROS_DISTRO:
+ROS_DOMAIN_ID:
+
+## CARLA
+Version:
+Map:
+Vehicle role:
+Bridge:
+Control topic:
+Control message:
+Forward test:
+STOP test:
+
+## Physical Pixloop
+LiDAR topic:
+LiDAR rate:
+LiDAR odometry:
+ZED topic(s):
+Chassis RX topic:
+
+## Localization
+NDT node:
+Pose topic:
+Odometry topic:
+
+## Planning
+Map server:
+Planner server:
+Goal topic:
+Path topic:
+Path successfully generated:
 
 ## Git
+Branch:
+Commit:
+Pull Request:
 
-```bash
+## Observations
+
+## Problems Found
+Commit:
+cd ~/pixloop-cyberphysical-labs
+
 git status
 git diff
 
-git branch
-git branch -a
+git add students/team-a/session01
+git commit -m "docs: add team-a session01 environment validation"
+git push -u origin feature/team-a/session01
+Open a Pull Request into main.
+Instructor Reference — Physical CAN Route B
+The current validated command architecture is:
+ROS 2 Humble
+  → ros1_bridge
+  → ROS 1 Noetic
+  → socketcan_bridge
+  → emuccan0
+  → VCU
+This section is for infrastructure validation, not student motion.
+23. EMUC
+sudo modprobe emuc2socketcan
+sudo systemctl stop ModemManager
 
-git switch main
-git pull origin main
+sudo /home/dc/Downloads/Linux/emucd_64 \
+  -s7 -e0 /dev/ttyACM0 emuccan0 emuccan1
+Then:
+sudo ip link set emuccan0 up
+sudo ip link set emuccan1 up
+ip -details link show emuccan0
+24. Bridge container
+sudo docker start pixloop-route-b-test
+sudo docker ps --filter name=pixloop-route-b-test
+Terminal A — ROS 1 master
+sudo docker exec -it pixloop-route-b-test bash --noprofile --norc
+Inside:
+source /opt/ros/noetic/setup.bash
+export ROS_MASTER_URI=http://localhost:11311
+roscore
+Terminal B — ros1_bridge
+sudo docker exec \
+  -u 1000:1000 \
+  -e HOME=/tmp \
+  -it pixloop-route-b-test \
+  bash --noprofile --norc
+Inside:
+source /opt/ros/noetic/setup.bash
+source /humble_ws/install/setup.bash
+source /can_msgs_ws/install/local_setup.bash
+source /bridge_ws/install/local_setup.bash
 
-git switch -c feature/<team>/session01
+export ROS_MASTER_URI=http://localhost:11311
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-git add <FILE>
-git commit -m "message"
+ros2 run ros1_bridge dynamic_bridge -- --bridge-all-2to1-topics
+Terminal C — ROS 1 to SocketCAN
+sudo docker exec -it pixloop-route-b-test bash --noprofile --norc
+Inside:
+source /opt/ros/noetic/setup.bash
+export ROS_MASTER_URI=http://localhost:11311
 
-git push -u origin feature/<team>/session01
-git push
+rosrun socketcan_bridge topic_to_socketcan_node \
+  _can_device:=emuccan0 \
+  sent_messages:=/pixloop/chassis/can/tx_test
+Host endpoint:
+ros2 topic info /pixloop/chassis/can/tx_test --verbose
+Latest stationary authority validation:
+cd /data/workspaces/pixloop-sensor-ws
 
-git log --oneline --decorate -10
-git remote -v
-```
+source /opt/ros/humble/setup.bash
+source install/setup.bash
 
-## ROS 2
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
-```bash
-ros2 node list
-ros2 node info <NODE>
+PYTHONPATH=src/pixloop_chassis:$PYTHONPATH \
+python3 -m pixloop_chassis.route_b_authority_probe \
+  --ros-args \
+  -p physical_enable:=true \
+  -p sustained_stationary:=true \
+  -p armed_duration_sec:=2.5 \
+  -p warmup_sec:=1.0
+Validated result:
+FINISH: sustained stationary validation completed without safety abort;
+en_states={1280: 1, 1281: 1, 1282: 1}
+This validates stationary authority only. It does not by itself validate non-zero steering, propulsion, gear release, or vehicle motion.
+25. Expected End-of-Session Understanding
+Students should leave Session 01 able to recognize this complete flow:
+CARLA
+  └── simulated sensors + simulated vehicle control
 
-ros2 topic list
-ros2 topic info <TOPIC>
-ros2 topic info <TOPIC> --verbose
-ros2 topic echo <TOPIC>
-ros2 topic hz <TOPIC>
+PHYSICAL PIXLOOP
+  ├── RoboSense
+  ├── ZED
+  ├── KISS-ICP
+  ├── EKF
+  ├── chassis RX
+  │
+  ├── NDT localization
+  │
+  ├── Nav2 map server
+  ├── global costmap
+  ├── planner server
+  ├── goal bridge
+  └── planned path in RViz
 
-ros2 interface show <MESSAGE_TYPE>
-```
-
----
-
-# 43. Flujo esperado de la sesión
-
-```text
-Connect to Pixloop
-        │
-        ▼
-Inspect Linux + ROS 2
-        │
-        ▼
-Locate workspace
-        │
-        ▼
-Clone repository
-        │
-        ▼
-Create feature branch
-        │
-        ▼
-First commit
-        │
-        ▼
-Start CARLA
-        │
-        ▼
-Start ROS 2 bridge
-        │
-        ▼
-ros2 node list
-ros2 topic list
-        │
-        ▼
-Discover sensors
-        │
-        ▼
-Discover control topic
-        │
-        ▼
-Inspect message
-        │
-        ▼
-Move vehicle in CARLA
-        │
-        ▼
-STOP
-        │
-        ▼
-Observe Pixloop stack
-        │
-        ▼
-Complete results.md
-        │
-        ▼
-Commit + Push
-        │
-        ▼
-Pull Request
-```
-
----
-
-# 44. Próxima sesión
-
-## Sesión 02 — 10 de octubre de 2026
-
-En la siguiente sesión se profundizará en:
-
-```text
-ROS 2 graph
-Publishers
-Subscribers
-Sensors
-TF
-Frames
-RViz / Foxglove
-Sensor visualization
-```
-
-El objetivo será pasar de **descubrir que los componentes existen** a comprender **cómo se relacionan espacialmente y cómo fluye la información entre ellos**.
-
----
-
-# Instructor Checklist
-
-Antes de iniciar la práctica verificar:
-
-- [ ] `PIXLOOP_IP`
-- [ ] usuario SSH
-- [ ] autenticación SSH
-- [ ] versión Ubuntu
-- [ ] ROS 2 distro
-- [ ] `ROS_DOMAIN_ID`
-- [ ] ruta del workspace Pixloop
-- [ ] URL del repositorio GitHub
-- [ ] protección de `main`
-- [ ] acceso de los estudiantes al repositorio
-- [ ] versión CARLA
-- [ ] ruta de CARLA
-- [ ] comando de inicio de CARLA
-- [ ] workspace del ROS bridge
-- [ ] comando del ROS bridge
-- [ ] role name del vehículo
-- [ ] tópico de cámara
-- [ ] tópico de LiDAR
-- [ ] tópico de IMU
-- [ ] tópico de odometría
-- [ ] tópico de control
-- [ ] tipo de mensaje de control
-- [ ] comando de avance probado
-- [ ] comando de STOP probado
-- [ ] comando(s) para levantar el stack completo
-- [ ] CARLA probado antes de la sesión
-- [ ] movimiento y STOP probados antes de la sesión
-- [ ] workflow de branch → push → Pull Request probado
+CONTROL INFRASTRUCTURE
+  ROS 2
+    → ROS 1 bridge
+    → socketcan_bridge
+    → emuccan0
+    → VCU
+The session does not require students to make the physical vehicle follow the planned path.
