@@ -2,21 +2,155 @@
 
 Hands-on laboratory activities using the **Pixloop autonomous vehicle research platform**.
 
-The repository is organized as a sequence of seven guided sessions covering collaborative software development, ROS 2, CARLA simulation, sensors, localization, planning and vehicle control.
+The repository contains seven guided sessions in which students progressively develop the tools required to solve a common cyber-physical systems challenge involving **autonomous navigation, path planning, localization, vehicle state and energy-aware decision making**.
 
-## Schedule
+---
 
-| Session | Date | Main topic |
-|---|---|---|
-| 01 | 2026-10-03 | SSH · Git/GitHub · ROS 2 · CARLA onboarding |
-| 02 | 2026-10-10 | ROS 2 graph · Sensors · TF · Visualization |
-| 03 | 2026-10-24 | Vehicle control · Odometry · Feedback |
-| 04 | 2026-11-07 | KISS-ICP · EKF · State estimation |
-| 05 | 2026-11-14 | Persistent map · NDT · Localization |
-| 06 | 2026-11-21 | Nav2 · Path planning · Tracking |
-| 07 | 2026-11-28 | Integration · Validation · Final challenge |
+## Final Challenge
 
-## Repository structure
+The main objective of the laboratory sequence is to develop and validate a navigation system capable of planning routes while considering the vehicle's available energy.
+
+The vehicle must be able to:
+
+```text
+Receive a destination
+        │
+        ▼
+Estimate its current pose
+        │
+        ▼
+Generate a feasible path
+        │
+        ▼
+Estimate route cost / distance
+        │
+        ▼
+Evaluate available energy
+        │
+        ├──────── Enough energy ────────► Continue toward destination
+        │
+        └──────── Insufficient energy
+                         │
+                         ▼
+                Evaluate charging stations
+                         │
+                         ▼
+                 Which stations are reachable?
+                         │
+                         ▼
+              Select an appropriate station
+                         │
+                         ▼
+                  Generate new path
+```
+
+The final system should therefore combine two decisions:
+
+```text
+WHERE SHOULD THE VEHICLE GO?
+            +
+CAN THE VEHICLE REACH IT?
+```
+
+The challenge is not limited to finding the geometrically shortest path.
+
+Students should progressively consider:
+
+```text
+vehicle pose
+map
+planned path
+path length
+current energy state
+estimated energy consumption
+charging-station locations
+reachability
+alternative destinations
+```
+
+A simplified decision can be expressed as:
+
+```text
+Energy required for route
+          vs.
+Available vehicle energy
+```
+
+If the planned destination cannot be reached with the available energy, the system should evaluate the known charging stations and determine which alternatives remain feasible.
+
+> The exact energy model and charging-station selection strategy will be developed progressively during the laboratory sessions.
+
+---
+
+## Schedule and Challenge Progression
+
+| Session | Date | Main topic | Contribution to the final challenge |
+|---|---|---|---|
+| **01** | 2026-10-03 | Pixloop onboarding · SSH · Git/GitHub · ROS 2 · CARLA | Access the platform, understand the software environment and identify the interfaces that will later provide vehicle, sensor and planning information. |
+| **02** | 2026-10-10 | ROS 2 graph · Sensors · TF · RViz/Foxglove | Understand where the vehicle is, how sensors relate spatially and how information flows through the system. |
+| **03** | 2026-10-24 | Vehicle state · Odometry · Data acquisition | Obtain and process vehicle-state information required to estimate motion, traveled distance and eventually energy consumption. |
+| **04** | 2026-11-07 | KISS-ICP · EKF · Localization | Estimate the vehicle pose required to plan routes from the current position. |
+| **05** | 2026-11-14 | Persistent map · NDT · Charging-station representation | Localize the vehicle on a persistent map and represent candidate destinations and charging stations in the same reference frame. |
+| **06** | 2026-11-21 | Nav2 · Global path planning · Route cost | Generate paths toward a destination or charging station and calculate metrics such as path length and estimated route cost. |
+| **07** | 2026-11-28 | Energy-aware planning · Integration · Final challenge | Combine localization, path planning and energy estimation to decide whether to continue toward the destination or reroute to a reachable charging station. |
+
+---
+
+## Expected Final Architecture
+
+```text
+                   ┌──────────────────────┐
+                   │      Destination     │
+                   └──────────┬───────────┘
+                              │
+                              ▼
+┌───────────────┐     ┌──────────────────┐
+│ Vehicle Pose  │────►│   Path Planner   │
+└───────────────┘     └────────┬─────────┘
+                               │
+                               ▼
+                       ┌───────────────┐
+                       │ Planned Path  │
+                       └───────┬───────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │ Route Cost / Length │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │ Energy Requirement  │
+                    └──────────┬──────────┘
+                               │
+                ┌──────────────▼──────────────┐
+                │ Compare with Available      │
+                │ Vehicle Energy              │
+                └──────────────┬──────────────┘
+                               │
+                ┌──────────────┴──────────────┐
+                │                             │
+                ▼                             ▼
+        ENERGY SUFFICIENT             ENERGY INSUFFICIENT
+                │                             │
+                ▼                             ▼
+      Continue to destination       Charging-station manager
+                                              │
+                                              ▼
+                                  Evaluate candidate stations
+                                              │
+                                              ▼
+                                     Reachability check
+                                              │
+                                              ▼
+                                      Station selection
+                                              │
+                                              ▼
+                                         Re-plan path
+```
+
+---
+
+## Repository Structure
 
 ```text
 pixloop-cyberphysical-labs/
@@ -39,7 +173,9 @@ pixloop-cyberphysical-labs/
 └── students/
 ```
 
-## Student workflow
+---
+
+## Student Workflow
 
 Student work must be performed using feature branches.
 
@@ -80,11 +216,13 @@ main
 
 Student work should not be pushed directly to `main`.
 
-## Laboratory sessions
+---
+
+## Laboratory Sessions
 
 ### Session 01 — October 3, 2026
 
-**Pixloop onboarding: SSH · Git/GitHub · ROS 2 · CARLA**
+**Pixloop onboarding · SSH · Git/GitHub · ROS 2 · CARLA**
 
 [Open Session 01](labs/session01_2026-10-03/README.md)
 
@@ -92,68 +230,79 @@ Student work should not be pushed directly to `main`.
 
 **ROS 2 graph · Sensors · TF · Visualization**
 
-Documentation will be added progressively.
+[Open Session 02](labs/session02_2026-10-10/README.md)
 
 ### Session 03 — October 24, 2026
 
-**Vehicle control · Odometry · Feedback**
+**Vehicle state · Odometry · Data acquisition**
 
-Documentation will be added progressively.
+[Open Session 03](labs/session03_2026-10-24/README.md)
 
 ### Session 04 — November 7, 2026
 
-**KISS-ICP · EKF · State estimation**
+**KISS-ICP · EKF · Localization**
 
-Documentation will be added progressively.
+[Open Session 04](labs/session04_2026-11-07/README.md)
 
 ### Session 05 — November 14, 2026
 
-**Persistent map · NDT · Localization**
+**Persistent map · NDT · Charging-station representation**
 
-Documentation will be added progressively.
+[Open Session 05](labs/session05_2026-11-14/README.md)
 
 ### Session 06 — November 21, 2026
 
-**Nav2 · Path planning · Tracking**
+**Nav2 · Global path planning · Route-cost estimation**
 
-Documentation will be added progressively.
+[Open Session 06](labs/session06_2026-11-21/README.md)
 
 ### Session 07 — November 28, 2026
 
-**Integration · Validation · Final challenge**
+**Energy-aware navigation · Integration · Final challenge**
 
-Documentation will be added progressively.
+[Open Session 07](labs/session07_2026-11-28/README.md)
 
-## General engineering workflow
+---
 
-The activities follow a progressive workflow:
+## General Engineering Workflow
+
+The laboratory sequence follows a progressive engineering workflow:
 
 ```text
-Connect
-   │
-   ▼
-Inspect
-   │
-   ▼
-Understand
-   │
-   ▼
-Simulate
-   │
-   ▼
-Develop
-   │
-   ▼
+Access the platform
+        │
+        ▼
+Understand sensors and ROS 2
+        │
+        ▼
+Estimate vehicle state
+        │
+        ▼
+Localize on the map
+        │
+        ▼
+Generate candidate paths
+        │
+        ▼
+Measure route cost
+        │
+        ▼
+Estimate energy requirement
+        │
+        ▼
+Evaluate reachability
+        │
+        ▼
+Select destination / charging station
+        │
+        ▼
 Validate
-   │
-   ▼
-Document
-   │
-   ▼
-Review
+        │
+        ▼
+Document and review
 ```
 
-Students are expected to use ROS 2 inspection tools to understand the system before modifying it.
+Students are expected to inspect and understand the ROS 2 interfaces before modifying the system.
 
 Typical tools include:
 
@@ -170,9 +319,95 @@ ros2 topic hz <TOPIC>
 ros2 interface show <MESSAGE_TYPE>
 ```
 
+---
+
+## Final Challenge — Minimum Functional Requirements
+
+At the end of the seven sessions, the team should be able to demonstrate a prototype that:
+
+```text
+1. knows or receives the current vehicle pose;
+
+2. receives a target destination;
+
+3. generates a global path to that destination;
+
+4. obtains the path distance or an equivalent route-cost metric;
+
+5. receives or estimates the vehicle's available energy;
+
+6. estimates whether the destination is reachable;
+
+7. maintains the location of one or more charging stations;
+
+8. evaluates the routes to candidate charging stations;
+
+9. rejects charging stations that cannot be reached;
+
+10. selects a feasible charging station when the original
+    destination cannot be safely reached;
+
+11. generates the corresponding alternative path;
+
+12. exposes the resulting decision and path through ROS 2
+    and/or RViz.
+```
+
+A possible high-level output is:
+
+```text
+Current energy: 32 %
+
+Requested destination:
+Point B
+
+Path to destination:
+2.8 km
+
+Estimated required energy:
+38 %
+
+Decision:
+DESTINATION NOT REACHABLE
+
+Candidate charging stations:
+
+Station A
+Distance: 0.8 km
+Reachable: YES
+
+Station B
+Distance: 1.4 km
+Reachable: YES
+
+Station C
+Distance: 3.1 km
+Reachable: NO
+
+Selected station:
+Station A
+
+Action:
+REPLAN TO CHARGING STATION
+```
+
+The exact selection criterion does not need to be limited to geometric distance. Depending on the progress of the project, later implementations may consider:
+
+```text
+path length
+estimated energy consumption
+remaining-energy margin
+map constraints
+route feasibility
+charging-station availability
+mission priority
+```
+
+---
+
 ## Safety
 
-Vehicle motion commands must be validated in simulation before being tested on the physical platform.
+Vehicle motion commands must first be validated in simulation.
 
 During laboratory activities:
 
@@ -182,9 +417,11 @@ During laboratory activities:
 - Unknown ROS 2 topics must be inspected before publishing commands.
 - Students must not execute physical vehicle commands copied from external sources without validating the topic and message interface.
 
-## Repository policy
+---
 
-The `main` branch represents the reviewed baseline of the laboratory repository.
+## Repository Policy
+
+The `main` branch represents the reviewed baseline.
 
 Student development follows:
 
@@ -196,13 +433,13 @@ main
  └── feature/team-c/session01
 ```
 
-The expected integration process is:
+Integration workflow:
 
 ```text
 feature branch
       │
       ▼
-   commit
+    commit
       │
       ▼
      push
@@ -217,7 +454,7 @@ Pull Request
    changes
       │
       ▼
-    merge
+     merge
       │
       ▼
      main
@@ -225,18 +462,19 @@ Pull Request
 
 Do not merge a Pull Request until it has been reviewed.
 
-## Large files
+---
+
+## Large Files
 
 Do not commit large generated files unless explicitly requested.
 
-Examples include:
+Examples:
 
 ```text
 ROS bags
 CARLA recordings
 datasets
-point clouds
-maps
+large point clouds
 compiled binaries
 build directories
 large model files
@@ -253,15 +491,17 @@ scripts
 laboratory evidence
 ```
 
-## Repository status
+---
+
+## Repository Status
 
 Current development phase:
 
 ```text
-Session 01 preparation
+Session 01 — Pixloop onboarding
 ```
 
-The detailed instructions for the first laboratory session are available at:
+Detailed instructions:
 
 ```text
 labs/session01_2026-10-03/README.md
