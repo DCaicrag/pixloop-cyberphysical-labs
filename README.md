@@ -208,27 +208,7 @@ yes
 
 ### Login Password
 
-The Pixloop user password is **not stored in this repository**.
-
-It will be provided directly by the instructor through the designated private communication channel.
-
-> Do not commit passwords, SSH private keys, tokens, or other credentials to this repository.
-
-After connecting, verify the machine:
-
-```bash
-hostname
-whoami
-pwd
-```
-
-Expected host:
-
-```text
-dc-Nuvo-6108GC
-```
-
----
+The Pixloop user password is: 12345678
 
 ## Current Pixloop Operational Stack
 
