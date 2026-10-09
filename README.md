@@ -173,6 +173,129 @@ pixloop-cyberphysical-labs/
 └── students/
 ```
 
+## Pixloop Access
+
+The physical Pixloop platform is accessed remotely through SSH.
+
+### Host
+
+```text
+Hostname: dc-Nuvo-6108GC
+User: dc
+```
+
+### SSH connection
+
+From a terminal:
+
+```bash
+ssh dc@<PIXLOOP_IP>
+```
+
+The current Pixloop IP address will be provided by the instructor before the laboratory session.
+
+On the first connection, SSH may ask:
+
+```text
+Are you sure you want to continue connecting (yes/no/[fingerprint])?
+```
+
+Answer:
+
+```text
+yes
+```
+
+### Login Password
+
+The Pixloop user password is **not stored in this repository**.
+
+It will be provided directly by the instructor through the designated private communication channel.
+
+> Do not commit passwords, SSH private keys, tokens, or other credentials to this repository.
+
+After connecting, verify the machine:
+
+```bash
+hostname
+whoami
+pwd
+```
+
+Expected host:
+
+```text
+dc-Nuvo-6108GC
+```
+
+---
+
+## Current Pixloop Operational Stack
+
+The current physical platform uses ROS 2 Humble and is organized around the following main components:
+
+```text
+RoboSense LiDAR
+      ↓
+LiDAR Bridge
+      ↓
+KISS-ICP
+      ↓
+State Estimation / EKF
+      ↓
+Localization / NDT
+      ↓
+Nav2 Global Planner
+      ↓
+Planned Path
+```
+
+Additional interfaces include:
+
+```text
+ZED Camera
+Chassis CAN RX
+Wheel Speed
+Battery / BMS
+```
+
+Main ROS 2 interfaces currently used in the laboratories include:
+
+```text
+/rslidar_points
+/pixloop/lidar/points
+/pixloop/lidar/odom
+
+/zed/zed_node/rgb/color/rect/image
+/zed/zed_node/point_cloud/cloud_registered
+/zed/zed_node/odom
+
+/pixloop/chassis/can/raw
+/pixloop/energy/battery_state
+
+/goal_pose
+/compute_path_to_pose
+/pixloop/planning/path
+/pixloop/planning/status
+```
+
+The detailed operational bringup procedure is documented in:
+
+[`docs/setup/PIXLOOP_BRINGUP.md`](docs/setup/PIXLOOP_BRINGUP.md)
+
+This document contains:
+
+- ROS 2 workspace setup;
+- individual sensor terminals;
+- integrated Pixloop bringup;
+- mapping;
+- localization and planning;
+- chassis CAN RX;
+- chassis Route B containers;
+- wheel-speed decoding;
+- battery/BMS monitoring.
+
+
 ---
 
 ## Student Workflow
