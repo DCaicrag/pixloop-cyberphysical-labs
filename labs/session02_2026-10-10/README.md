@@ -281,6 +281,143 @@ Create an interface table using this template:
 
 At the end of the session, compare the three files and agree on one **shared cross-team contract**, explicitly noting unresolved interface owners, types, frames, and dependencies.
 
+## Challenge Development Files
+
+To avoid duplicated work, each team should build on the existing Pixloop structure and add only the components required for the final challenge.
+
+### Team A — Localization & Mapping
+
+Main existing files/packages to build on:
+
+- `src/pixloop_slam/`
+  - Provides LiDAR odometry through KISS-ICP.
+- `src/pixloop_localization/`
+  - Provides state estimation and global localization.
+- `src/pixloop_tf/`
+  - Defines the transforms required to keep all subsystems in a common frame.
+
+Expected contribution:
+
+- validate the current vehicle pose;
+- expose a stable localization interface for the planner;
+- make sure the vehicle pose is available in the global `map` frame;
+- avoid creating a second localization pipeline if the current one already provides the required information.
+
+Suggested test:
+
+- run the localization stack in WSL/ROS 2 with recorded data or available test inputs;
+- in CARLA, verify that the localization interface behaves consistently while the simulated vehicle moves.
+
+---
+
+### Team B — Perception & Vehicle State
+
+Main existing files/packages to build on:
+
+- `src/pixloop_zed/`
+  - Provides camera, point-cloud and visual odometry data.
+- `src/pixloop_chassis/`
+  - Provides CAN data, wheel-speed decoding and vehicle-state information.
+- `src/pixloop_chassis/pixloop_chassis/energy_monitor.py`
+  - Provides the current battery/BMS interface.
+
+Expected contribution:
+
+- add or integrate an object-detection node using the ZED image stream;
+- define a simple ROS 2 output for detected objects that can later be consumed by planning;
+- provide wheel speed / vehicle state in a reusable interface;
+- consume `/pixloop/energy/battery_state` instead of creating another battery decoder;
+- create a small node that converts battery state into information useful for the final challenge, for example:
+  - available energy;
+  - estimated remaining range;
+  - low-energy warning;
+  - energy margin.
+
+Suggested test:
+
+- first test the node in WSL using synthetic or recorded ROS 2 messages;
+- then test object detection and vehicle-state interfaces in CARLA or with recorded Pixloop data;
+- confirm that the outputs remain independent from the physical vehicle hardware.
+
+---
+
+### Team C — Planning & Decision Making
+
+Main existing files/packages to build on:
+
+- `src/pixloop_planning/`
+  - Existing Nav2 planning, goal bridge and path interfaces.
+- `src/pixloop_localization/`
+  - Source of the current vehicle pose.
+- `/pixloop/energy/battery_state`
+  - Energy input from Team B.
+- `/pixloop/planning/path`
+  - Existing planned path output.
+
+Expected contribution:
+
+- do not create a second global planner;
+- consume the existing planned path and calculate its total length;
+- define charging stations as known candidate poses in the map;
+- create a decision node that receives:
+  - current vehicle pose;
+  - requested destination;
+  - path length / route cost;
+  - current battery state;
+  - candidate charging stations;
+- determine whether the requested destination is reachable;
+- if it is not reachable, evaluate alternative charging stations and request a new path to a feasible one.
+
+Suggested test:
+
+- in WSL, use synthetic poses, battery percentages and path lengths to validate the decision logic;
+- in CARLA, place several virtual charging-station poses and verify:
+  - reachable destination;
+  - unreachable destination;
+  - reachable charger;
+  - multiple charger candidates;
+  - low-battery rerouting.
+
+---
+
+## Minimal New Nodes for the Challenge
+
+The project should preferably add only a few focused nodes instead of rebuilding existing Pixloop functionality.
+
+Possible new components:
+
+- `object_detector`
+  - ZED image → detected objects.
+- `energy_estimator`
+  - battery state + vehicle information → remaining-energy / range estimate.
+- `path_cost_evaluator`
+  - planned path → path length / estimated route cost.
+- `energy_aware_decision`
+  - destination + path cost + battery state + charging stations → final destination decision.
+
+Conceptually:
+
+```text
+Existing Pixloop Stack
+        │
+        ├── Localization ─────────────┐
+        ├── ZED / Perception ─────────┤
+        ├── Vehicle State ────────────┤
+        ├── Battery State ────────────┤
+        └── Nav2 Planned Path ────────┤
+                                     ▼
+                         Challenge-Specific Nodes
+                                     │
+                 ┌───────────────────┼───────────────────┐
+                 ▼                   ▼                   ▼
+          Object Detection     Energy Estimate      Path Cost
+                 └───────────────────┬───────────────────┘
+                                     ▼
+                          Energy-Aware Decision
+                                     │
+                                     ▼
+                        Destination / Charger
+
 ## 8. Git Workflow
 
 Run these commands in your **local clone of the laboratory repository** (not in a Pixloop production workspace). Replace `team-a` with your team's folder/name:
