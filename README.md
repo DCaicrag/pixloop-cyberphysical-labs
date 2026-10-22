@@ -160,7 +160,9 @@ pixloop-cyberphysical-labs/
 ├── docs/
 │   ├── architecture/
 │   ├── setup/
-│   │   └── Guia_integracion_ZED_YOLO_ROS2.md
+│   │   ├── .gitkeep
+│   │   ├── Guia_integracion_ZED_YOLO_ROS2.md
+│   │   └── PIXLOOP_BRINGUP.md
 │   └── troubleshooting/
 ├── labs/
 │   ├── session01_2026-10-03/
@@ -169,7 +171,7 @@ pixloop-cyberphysical-labs/
 │   ├── session04_2026-11-07/
 │   ├── session05_2026-11-14/
 │   ├── session06_2026-11-21/
-│   └── session07_2026-11-28/
+│   ├── session07_2026-11-28/
 ├── scripts/
 └── students/
 ```
