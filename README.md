@@ -160,6 +160,7 @@ pixloop-cyberphysical-labs/
 ├── docs/
 │   ├── architecture/
 │   ├── setup/
+│   │   └── Guia_integracion_ZED_YOLO_ROS2.md
 │   └── troubleshooting/
 ├── labs/
 │   ├── session01_2026-10-03/
